@@ -23,6 +23,7 @@ import signal
 import pyte
 import shutil
 import warnings
+import re
 
 from .options import RogueBoxOptions
 from .parser import RogueParser
@@ -33,6 +34,7 @@ from .exceptions import *
 
 warnings.simplefilter("always", RogueLoopWarning)
 
+ESC=chr(27).encode()
 
 class Terminal:
     def __init__(self, columns, lines):
@@ -164,6 +166,8 @@ class RogueBox:
         self.pid = None
         self.has_cmd_count = False
 
+        self.FoodNum=0
+
         if options.start_game:
             self._start()
 
@@ -180,6 +184,7 @@ class RogueBox:
         """
         # reset internal variables
         self.step_count = 0
+        self.stack_count = 0
         self.state = None
         self.reward = None
 
@@ -203,6 +208,11 @@ class RogueBox:
         while not "Exp:" in self.screen[-1]:
             # TODO: can rogue enter an endless loop here too?
             time.sleep(self.busy_wait_seconds)
+            self.stack_count+=1
+            if(self.stack_count>1000):
+                print("Warning may be stack in Rogue start processing.")
+                self.reset()
+                break
             self._update_screen()
 
         if not self.has_cmd_count:
@@ -282,7 +292,10 @@ class RogueBox:
     @property
     def player_pos(self):
         """current player position"""
-        return self.frame_history[-1].get_list_of_positions_by_tile("@")[0]
+        if(len(self.frame_history[-1].get_list_of_positions_by_tile("@"))>0):
+            return self.frame_history[-1].get_list_of_positions_by_tile("@")[0]
+        else:
+            return []
 
     @property
     def stairs_pos(self):
@@ -345,14 +358,50 @@ class RogueBox:
         if "ore--" in messagebar:
             # press space
             self.pipe.write(' '.encode())
+            return 0
         elif "all it" in messagebar:
             # press esc
             self.pipe.write('\e'.encode())
+            return 0
+        elif "Which" in messagebar and "eat" in messagebar:
+            # press Star
+            #print(self.screen[0])
+            time.sleep(self.busy_wait_seconds)
+            self.pipe.write('*'.encode())
+            time.sleep(self.busy_wait_seconds)
+            self.FoodNum=0
+            self._update_screen()
+            messagebar=self.screen[0]
+            if('Some' in messagebar):
+                self.FoodNum=1
+            elif('don\'t in messagebar'):
+                self.FoodNum=0
+            else:
+                self.FoodNum=int(re.sub("\\D","",messagebar))
+            #print("Food Num is {0}".format(self.FoodNum))
+            #print("///")
+            #print(self.screen[0])
+            self.pipe.write(' '.encode())
+            time.sleep(self.busy_wait_seconds)
+            self._update_screen()
+            #print("///")
+            #print(self.screen[0])
+            self.pipe.write(ESC)
+            time.sleep(self.busy_wait_seconds)
+            self._update_screen()
+            self.pipe.write(ESC)
+            time.sleep(self.busy_wait_seconds)
+            self._update_screen()
+            #print("///")
+            #print("ESC?")
+            time.sleep(self.busy_wait_seconds)
+            #print(self.screen[0])
+            
 
     def _need_to_dismiss(self):
         """check if there are status messages that need to be dismissed"""
         messagebar = self.screen[0]
-        if "all it" in messagebar or "ore--" in messagebar:
+        if "all it" in messagebar or "ore--" in messagebar or "Which" in messagebar:
             return True
         else:
             return False
@@ -373,6 +422,8 @@ class RogueBox:
             self._dismiss_message()
             time.sleep(self.busy_wait_seconds)
             self._update_screen()
+            #print(self.screen[0])
+            #n_cmds += 1
             n_cmds += 1
             if (time.perf_counter() - t0) > self.max_busy_wait_seconds:
                 raise RogueLoopError
@@ -405,10 +456,16 @@ class RogueBox:
             if self.game_over():
                 break
             expected_cmd_count += dismiss_cmds
+            #print(new_cmd_count, expected_cmd_count)
             try:
                 # very rarely, the screen does not completely refresh
                 # in particular the status bar (and cmd count) may not be totally drawn
                 new_cmd_count = self.parser.get_cmd_count(self.screen)
+                """
+                if("Which" in self.screen[0]):
+                    time.sleep(self.busy_wait_seconds)
+                    new_cmd_count=expected_cmd_count
+                """
             except RuntimeError:
                 # screen was not fully refreshed and did not contain yet the cmd count
                 pass
@@ -435,6 +492,30 @@ class RogueBox:
                 command = '<'
 
         self.pipe.write(command.encode())
+        if(command=="i"):
+            time.sleep(self.busy_wait_seconds)
+            self.pipe.write(' '.encode())
+            time.sleep(self.busy_wait_seconds)
+            self.pipe.write(self.refresh_command)
+            time.sleep(self.busy_wait_seconds*400)
+            self._update_screen()
+            new_screen = self.screen
+
+            state_generator = state_generator or self.state_generator
+            reward_generator = reward_generator or self.reward_generator
+            self.reward = reward_generator.compute_reward(self.frame_history)
+            self.state = state_generator.compute_state(self.frame_history)
+
+            is_rogue_dead = self.game_over(new_screen)
+            won = (reward_generator and reward_generator.goal_achieved)
+            stop = self.evaluator.on_step(self.frame_history, command, self.reward, self.step_count)
+            lost = (stop or is_rogue_dead) and not won
+
+            if won or lost:
+                self.evaluator.on_run_end(self.frame_history, won, is_rogue_dead)
+
+            return self.reward, self.state, won, lost
+
         # rogue may not properly print all tiles after elaborating a command
         # so, based on the init options, we send a refresh command
         if self.refresh_after_commands:
@@ -450,7 +531,7 @@ class RogueBox:
             else:
                 # this build of rogue does not provide an easy and fast way to determine if the command elaboration is
                 # done, so we must wait a fixed amount of time
-                time.sleep(0.01)
+                time.sleep(0.001)
                 self._update_screen()
                 self._dismiss_all_messages()
         except RogueLoopError:
