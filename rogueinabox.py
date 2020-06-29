@@ -492,6 +492,7 @@ class RogueBox:
                 command = '<'
 
         self.pipe.write(command.encode())
+        # Inventory command is used to check num of items.
         if(command=="i"):
             time.sleep(self.busy_wait_seconds)
             self.pipe.write(' '.encode())
