@@ -218,7 +218,8 @@ class RogueBox:
         if not self.has_cmd_count:
             # if self.has_cmd_count was True then we found the cmd count previously so it will be still there
             # otherwise it may be the first time the game is started so we will check
-            self.has_cmd_count = "Cmd" in self.screen[-1]
+            #self.has_cmd_count = "Cmd" in self.screen[-1]
+            self.has_cmd_count = False
 
         self.frame_history = [self.parser.parse_screen(self.screen)]
 
@@ -374,7 +375,7 @@ class RogueBox:
             messagebar=self.screen[0]
             if('Some' in messagebar):
                 self.FoodNum=1
-            elif('don\'t in messagebar'):
+            elif('don\'t' in messagebar):
                 self.FoodNum=0
             else:
                 self.FoodNum=int(re.sub("\\D","",messagebar))
@@ -490,10 +491,9 @@ class RogueBox:
         if self.transform_descent_action and self.reached_amulet_level:
             if command == '>':
                 command = '<'
-
-        self.pipe.write(command.encode())
         # Inventory command is used to check num of items.
         if(command=="i"):
+            self.pipe.write(command.encode())
             time.sleep(self.busy_wait_seconds)
             self.pipe.write(' '.encode())
             time.sleep(self.busy_wait_seconds)
@@ -516,7 +516,19 @@ class RogueBox:
                 self.evaluator.on_run_end(self.frame_history, won, is_rogue_dead)
 
             return self.reward, self.state, won, lost
-
+        elif(len(command)==2 and command[0]=="m"):
+            self.pipe.write(command[0].encode())
+            time.sleep(self.busy_wait_seconds*2)
+            self.pipe.write(command[1].encode())
+            time.sleep(self.busy_wait_seconds*2)
+            self.pipe.write("v".encode())
+            time.sleep(self.busy_wait_seconds*2)
+            self.pipe.write(ESC)
+            time.sleep(self.busy_wait_seconds*2)
+            self._update_screen()
+            new_screen = self.screen
+        if(len(command)==1):
+            self.pipe.write(command.encode())
         # rogue may not properly print all tiles after elaborating a command
         # so, based on the init options, we send a refresh command
         if self.refresh_after_commands:

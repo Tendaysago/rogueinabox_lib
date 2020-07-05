@@ -11,3 +11,4 @@ pyte.egg-info/
 pyte/
 rogue.scr
 **/*.pyc
+/rogue
