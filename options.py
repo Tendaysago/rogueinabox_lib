@@ -93,7 +93,7 @@ class RogueBoxOptions:
                  state_generator="Dummy_StateGenerator", reward_generator="Dummy_RewardGenerator",
                  transform_descent_action=False,
                  refresh_after_commands=True, start_game=False, move_rogue=False,
-                 busy_wait_seconds=0.003, max_busy_wait_seconds=3):
+                 busy_wait_seconds=0.001, max_busy_wait_seconds=3):
         """
         :param str game_exe_path:
             rogue executable path.

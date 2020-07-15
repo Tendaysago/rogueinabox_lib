@@ -367,24 +367,26 @@ class RogueBox:
         elif "Which" in messagebar and "eat" in messagebar:
             # press Star
             #print(self.screen[0])
-            time.sleep(self.busy_wait_seconds)
+            time.sleep(self.busy_wait_seconds*2)
             self.pipe.write('*'.encode())
-            time.sleep(self.busy_wait_seconds)
+            time.sleep(self.busy_wait_seconds*2)
             self.FoodNum=0
             self._update_screen()
+            time.sleep(self.busy_wait_seconds*2)
             messagebar=self.screen[0]
             if('Some' in messagebar):
                 self.FoodNum=1
             elif('don\'t' in messagebar):
                 self.FoodNum=0
-            else:
-                self.FoodNum=int(re.sub("\\D","",messagebar))
+            elif('rations' in messagebar):
+                self.FoodNum=int(re.sub("\D","",messagebar))
             #print("Food Num is {0}".format(self.FoodNum))
             #print("///")
             #print(self.screen[0])
             self.pipe.write(' '.encode())
-            time.sleep(self.busy_wait_seconds)
+            time.sleep(self.busy_wait_seconds*2)
             self._update_screen()
+            time.sleep(self.busy_wait_seconds*2)
             #print("///")
             #print(self.screen[0])
             self.pipe.write(ESC)
